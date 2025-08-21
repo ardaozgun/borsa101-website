@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Borsa101 - BTC Teknik Analiz Sinyalleri</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Güven ve Netlik (Koyu Tema) -->
+    <!-- Application Structure Plan: Uygulama, kullanıcının ihtiyaç duyduğu tüm kritik bilgileri tek bir ekranda sunan bir dashboard yapısındadır. Üstte anahtar metrik kartları (Fiyat, Değişim, RSI, Sinyal), ortada fiyat ve göstergelerin (SMA50, SMA200) görselleştirildiği interaktif bir grafik ve altta yasal uyarı ile siteyi yayınlama rehberi bulunur. Bu yapı, verilerin hızlıca sindirilmesini ve anlık bir piyasa özeti sunulmasını sağlar. Karmaşık menülerden kaçınılarak odak, doğrudan sinyal ve veriler üzerinde tutulmuştur. -->
+    <!-- Visualization & Content Choices: 
+        - BTC Fiyat Trendi -> Hedef: Değişimi Gösterme -> Görselleştirme: Chart.js Çizgi Grafiği -> Etkileşim: Yakınlaştırma, kaydırma, araç ipuçları -> Gerekçe: Zaman içindeki fiyat hareketlerini göstermek için en standart ve etkili yöntemdir.
+        - SMA Kesişimleri -> Hedef: Karşılaştırma/Trend Tespiti -> Görselleştirme: Fiyat grafiği üzerine çizilmiş iki farklı çizgi (SMA50, SMA200) -> Etkileşim: Grafikle birlikte hareket eder -> Gerekçe: Alım/satım sinyallerinin temelini oluşturan "altın kesişim" ve "ölüm kesişimi" anlarını görsel olarak netleştirir.
+        - RSI Değeri -> Hedef: Bilgilendirme (Momentum) -> Görselleştirme: Dinamik Metrik Kartı -> Etkileşim: Değer anlık olarak güncellenir -> Gerekçe: Aşırı alım/satım bölgelerini hızlıca görmek için kritik bir veridir. Kart formatı anında okunabilirlik sağlar.
+        - Al/Sat Sinyali -> Hedef: Bilgilendirme (Sonuç) -> Görselleştirme: Renk kodlu (Yeşil/Kırmızı/Gri) büyük metrik kartı -> Etkileşim: Sinyal değiştikçe renk ve metin güncellenir -> Gerekçe: Uygulamanın ana çıktısıdır ve kullanıcının dikkatini anında çekmelidir.
+        - Yasal Uyarı & Yayınlama Rehberi -> Hedef: Bilgilendirme -> Görselleştirme: Yapılandırılmış metin blokları -> Etkileşim: Yok -> Gerekçe: Yasal zorunlulukları yerine getirmek ve kullanıcının bir sonraki adımını (yayınlama) netleştirmek için en uygun yöntemdir.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Koyu Gri Arka Plan */
+            color: #d1d5db; /* Açık Gri Metin */
+        }
+        .chart-container {
+            position: relative;
+            height: 50vh;
+            max-height: 500px;
+            width: 100%;
+        }
+        .metric-card {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            transition: all 0.2s ease-in-out;
+        }
+        .metric-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+        }
+        .signal-buy { background-color: #10b981; color: white; }
+        .signal-sell { background-color: #ef4444; color: white; }
+        .signal-hold { background-color: #6b7280; color: white; }
+    </style>
+</head>
+<body class="p-4 sm:p-6 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
+                Borsa<span class="text-blue-500">101</span>
+            </h1>
+            <p class="mt-2 text-lg text-gray-400">Bitcoin (BTC) için Otomatik Teknik Analiz Sinyalleri</p>
+        </header>
+
+        <main>
+            <!-- Metrik Kartları -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="metric-card p-6 rounded-xl">
+                    <h3 class="text-sm font-medium text-gray-400">Güncel Fiyat (USD)</h3>
+                    <p id="current-price" class="text-3xl font-bold text-white mt-1">$0.00</p>
+                </div>
+                <div class="metric-card p-6 rounded-xl">
+                    <h3 class="text-sm font-medium text-gray-400">24s Değişim</h3>
+                    <p id="price-change" class="text-3xl font-bold text-white mt-1">0.00%</p>
+                </div>
+                <div class="metric-card p-6 rounded-xl">
+                    <h3 class="text-sm font-medium text-gray-400">RSI (14 Gün)</h3>
+                    <p id="rsi-value" class="text-3xl font-bold text-white mt-1">0.00</p>
+                </div>
+                <div id="signal-card" class="p-6 rounded-xl text-center flex flex-col justify-center signal-hold">
+                    <h3 class="text-sm font-medium text-gray-200">GÜNCEL SİNYAL</h3>
+                    <p id="signal-text" class="text-3xl font-extrabold mt-1">BEKLE</p>
+                </div>
+            </div>
+
+            <!-- Grafik -->
+            <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 sm:p-6 mb-8">
+                <div class="chart-container">
+                    <canvas id="btcChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Yayınlama Rehberi -->
+            <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 mb-8">
+                <h2 class="text-2xl font-bold text-white mb-4">Bu Siteyi Nasıl Ücretsiz Yayınlarsınız?</h2>
+                <p class="text-gray-400 mb-4">Bu web sitesi, sunucuya ihtiyaç duymayan statik bir yapıdadır. Bu sayede aşağıdaki adımları izleyerek PC'nize hiçbir program kurmadan, tamamen ücretsiz olarak internette yayınlayabilirsiniz:</p>
+                <ol class="list-decimal list-inside space-y-3 text-gray-300">
+                    <li><strong>Dosyayı İndirin:</strong> Öncelikle bu sayfanın kodunu bilgisayarınıza `index.html` adıyla kaydedin.</li>
+                    <li><strong>Netlify'a Üye Olun:</strong> <a href="https://www.netlify.com/" target="_blank" class="text-blue-400 hover:underline">Netlify</a> web sitesine gidin ve ücretsiz bir hesap oluşturun (GitHub hesabınızla kolayca giriş yapabilirsiniz).</li>
+                    <li><strong>Sürükle ve Bırak:</strong> Netlify'daki "Sites" bölümüne gidin. `index.html` dosyasını tarayıcınızdaki belirtilen alana sürükleyip bırakın.</li>
+                    <li><strong>Yayında!</strong> İşte bu kadar! Netlify size siteniz için rastgele bir adres (örn: `essiz-isim-12345.netlify.app`) verecektir. Siteniz artık tüm dünyadan erişilebilir durumda. İsterseniz daha sonra site adını veya kendi alan adınızı ayarlayabilirsiniz.</li>
+                </ol>
+            </div>
+
+            <!-- Yasal Uyarı -->
+            <div class="bg-red-900/20 border border-red-700 text-red-300 px-4 py-3 rounded-xl" role="alert">
+                <strong class="font-bold">Önemli Yasal Uyarı:</strong>
+                <span class="block sm:inline mt-2 sm:mt-0">Bu sitede yer alan bilgiler ve sinyaller, yalnızca eğitim ve bilgilendirme amaçlıdır ve kesinlikle **yatırım tavsiyesi değildir.** Kripto para piyasaları yüksek risk içerir ve tüm yatırımınızı kaybedebilirsiniz. Herhangi bir finansal karar almadan önce kendi araştırmanızı yapmalı ve lisanslı bir finansal danışmana başvurmalısınız. Bu platformdaki sinyalleri kullanarak uğrayabileceğiniz hiçbir kayıptan site sahibi sorumlu tutulamaz.</span>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- VERİ SİMÜLASYONU ---
+            // Gerçek bir uygulamada bu veriler bir API'dan (örn: CoinGecko, Finnhub) çekilmelidir.
+            // Ücretsiz API'larda geçmiş veri kısıtlamaları olduğundan, burada bir simülasyon kullanıyoruz.
+            function generateMockData(days = 250) {
+                const data = [];
+                let price = 65000;
+                const startDate = new Date();
+                startDate.setDate(startDate.getDate() - days);
+
+                for (let i = 0; i < days; i++) {
+                    const date = new Date(startDate);
+                    date.setDate(date.getDate() + i);
+                    const volatility = (Math.random() - 0.49) * 4000; // Fiyat dalgalanması
+                    const trend = i / 20; // Uzun vadeli trend
+                    price += volatility + trend;
+                    if (price < 30000) price = 30000; // Minimum fiyat
+                    data.push({
+                        time: date.toISOString().split('T')[0],
+                        value: parseFloat(price.toFixed(2))
+                    });
+                }
+                return data;
+            }
+
+            const btcData = generateMockData();
+
+            // --- TEKNİK ANALİZ HESAPLAMALARI ---
+            function calculateSMA(data, period) {
+                const sma = [];
+                for (let i = period - 1; i < data.length; i++) {
+                    const subset = data.slice(i - period + 1, i + 1);
+                    const sum = subset.reduce((acc, curr) => acc + curr.value, 0);
+                    sma.push({ time: data[i].time, value: sum / period });
+                }
+                return sma;
+            }
+
+            function calculateRSI(data, period = 14) {
+                const rsi = [];
+                let gains = [];
+                let losses = [];
+
+                for (let i = 1; i < data.length; i++) {
+                    const change = data[i].value - data[i - 1].value;
+                    if (change > 0) {
+                        gains.push(change);
+                        losses.push(0);
+                    } else {
+                        gains.push(0);
+                        losses.push(Math.abs(change));
+                    }
+                }
+
+                let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
+                let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
+
+                for (let i = period; i < data.length; i++) {
+                    if (i > period) {
+                        avgGain = (avgGain * (period - 1) + gains[i-1]) / period;
+                        avgLoss = (avgLoss * (period - 1) + losses[i-1]) / period;
+                    }
+                    if (avgLoss === 0) {
+                        rsi.push({ time: data[i].time, value: 100 });
+                    } else {
+                        const rs = avgGain / avgLoss;
+                        const rsiValue = 100 - (100 / (1 + rs));
+                        rsi.push({ time: data[i].time, value: rsiValue });
+                    }
+                }
+                return rsi;
+            }
+            
+            // --- SİNYAL ÜRETİMİ ---
+            const sma50 = calculateSMA(btcData, 50);
+            const sma200 = calculateSMA(btcData, 200);
+            const rsi = calculateRSI(btcData, 14);
+
+            function generateSignal() {
+                const lastRsi = rsi[rsi.length - 1]?.value;
+                const lastSma50 = sma50[sma50.length - 1]?.value;
+                const prevSma50 = sma50[sma50.length - 2]?.value;
+                const lastSma200 = sma200[sma200.length - 1]?.value;
+                const prevSma200 = sma200[sma200.length - 2]?.value;
+
+                if (!lastRsi || !lastSma50 || !lastSma200) return { text: 'BEKLE', class: 'signal-hold' };
+
+                // Al Sinyali: RSI 30'un altında VE 50 günlük SMA, 200 günlük SMA'yı yukarı kesmiş (Golden Cross)
+                const goldenCross = prevSma50 <= prevSma200 && lastSma50 > lastSma200;
+                if (lastRsi < 30 && goldenCross) {
+                    return { text: 'AL', class: 'signal-buy' };
+                }
+
+                // Sat Sinyali: RSI 70'in üstünde VE 50 günlük SMA, 200 günlük SMA'yı aşağı kesmiş (Death Cross)
+                const deathCross = prevSma50 >= prevSma200 && lastSma50 < lastSma200;
+                if (lastRsi > 70 && deathCross) {
+                    return { text: 'SAT', class: 'signal-sell' };
+                }
+
+                return { text: 'BEKLE', class: 'signal-hold' };
+            }
+
+            // --- UI GÜNCELLEME ---
+            const latestPrice = btcData[btcData.length - 1].value;
+            const prevPrice = btcData[btcData.length - 2].value;
+            const priceChangePercent = ((latestPrice - prevPrice) / prevPrice * 100).toFixed(2);
+            const latestRsi = rsi[rsi.length - 1]?.value.toFixed(2) || 'N/A';
+            const signal = generateSignal();
+
+            document.getElementById('current-price').textContent = `$${latestPrice.toLocaleString('en-US')}`;
+            const priceChangeEl = document.getElementById('price-change');
+            priceChangeEl.textContent = `${priceChangePercent}%`;
+            priceChangeEl.style.color = priceChangePercent >= 0 ? '#34d399' : '#f87171';
+            document.getElementById('rsi-value').textContent = latestRsi;
+            
+            const signalCard = document.getElementById('signal-card');
+            const signalText = document.getElementById('signal-text');
+            signalCard.className = `p-6 rounded-xl text-center flex flex-col justify-center ${signal.class}`;
+            signalText.textContent = signal.text;
+
+            // --- GRAFİK OLUŞTURMA ---
+            const ctx = document.getElementById('btcChart').getContext('2d');
+            const btcChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'BTC Fiyatı',
+                            data: btcData,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.1,
+                            fill: true,
+                        },
+                        {
+                            label: 'SMA 50',
+                            data: sma50,
+                            borderColor: '#f59e0b',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            tension: 0.4,
+                        },
+                        {
+                            label: 'SMA 200',
+                            data: sma200,
+                            borderColor: '#ec4899',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            tension: 0.4,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    parsing: {
+                        xAxisKey: 'time',
+                        yAxisKey: 'value'
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'month'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#9ca3af'
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#9ca3af',
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString('en-US');
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#d1d5db'
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                }
+            });
+        });
+    </script>
+</body>
+</html>
